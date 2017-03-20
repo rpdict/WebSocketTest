@@ -6,15 +6,15 @@ var WebSocketFrame = require('websocket').frame;
 var WebSocketRouter = require('websocket').router;
 var W3CWebSocket = require('websocket').w3cwebsocket;
 var http = require('http');
-var clients = [];
+const sockets = {};
 
 var server = http.createServer(function(request, response) {
     console.log((new Date()) + ' Received request for ' + request.url);
     response.writeHead(404);
     response.end();
 });
-server.listen(8080, function() {
-    console.log((new Date()) + ' Server is listening on port 8080');
+server.listen(3000, function() {
+    console.log((new Date()) + ' Server is listening on port 3000');
 });
 
 wsServer = new WebSocketServer({
@@ -41,17 +41,26 @@ wsServer.on('request', function(request) {
     }
 
     var connection = request.accept('echo-protocol', request.origin);
-    clients.push(connection);
+    var user;
+
     console.log((new Date()) + ' Connection accepted.');
-    // console.log(connection.send);
 
+    connection.on('message', function(messageString) {
+        const message = JSON.parse(messageString.utf8Data);
+        console.log('message', message);
+        user = message.userId;
+        sockets[user] = sockets[user] || [];
+        sockets[user].push(connection);
+        sendMessages(user, {
+            data: 'newUserJoined'
+        });
 
-    //  for ( a in request.httpRequest.client) {
-    //    console.log(a);
-    //  }
-    // console.log(request.httpRequest);
-
-    connection.on('message', function(message) {
+        function sendMessages(userId, message) {
+            // console.log(sockets);
+            sockets[userId].forEach(socket => {
+                socket.send(JSON.stringify(message));
+            });
+        }
 
         // if (message.type === 'utf8') {
         //     console.log('Received Message: ' + message.utf8Data);
@@ -61,18 +70,11 @@ wsServer.on('request', function(request) {
         //     console.log('Received Binary Message of ' + message.binaryData.length + ' bytes');
         //     connection.sendBytes(message.binaryData);
         // }
-        console.log('Received Message: ' + message.utf8Data);
-        var json = JSON.stringify({
-            type: 'message',
-            data: message.utf8Data
-        });
-        console.log(json);
-        console.log(clients.length);
-        for (i = 0; i < clients.length; i++) {
-            clients[i].sendUTF(json);
-        }
+        // console.log('Received Message: ' + message.utf8Data);
+
     });
     connection.on('close', function(reasonCode, description) {
         console.log((new Date()) + ' Peer ' + connection.remoteAddress + ' disconnected.');
+        delete sockets[user];
     });
 });
